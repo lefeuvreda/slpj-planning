@@ -1,12 +1,19 @@
-SITE PUBLIC SLPJ - MISE A JOUR DU 30 NOVEMBRE 2026
+SLPJ · MISE À JOUR GITHUB - 30 NOVEMBRE HORS CALCUL - VERSION V3
 
-Les fichiers de ce dossier remplacent ceux du depot GitHub Pages.
-Le lundi 30 novembre est visible et peut etre renseigne, mais ses heures sont
-exclues du total comptabilise et des droits a recuperation.
+Correction : le menu déroulant des horaires du lundi 30 novembre n'affiche plus
+« 48 h max. » et ne bloque plus une sélection pour ce motif.
+Le lundi 30 reste soumis uniquement aux autres règles applicables : créneaux autorisés,
+pause et repos. Ses heures sont enregistrées et affichées, mais non comptabilisées.
 
-ATTENTION : deployee seule, cette mise a jour ne suffit PAS.
-La fonction Edge planning-api de Supabase doit etre redeployee avec le nouveau
-fichier planner-rules.mjs, et la migration SQL 003 doit etre executee.
+MODIFICATION GITHUB UNIQUEMENT :
+1. À la racine du dépôt publié sur GitHub Pages, remplacer index.html et app.js
+   par les fichiers contenus dans l'archive. L'archive complète comprend également
+   les autres fichiers, identiques à la version V2 pour faciliter un déploiement complet.
+2. Confirmer le commit et attendre que GitHub Actions / Pages indique le déploiement réussi.
+3. Ouvrir https://planning-equipe.runs-at.dev/?v=20261115-v3
+   puis faire Cmd+Maj+R.
+4. Vérifier « Version 30 novembre v3 · règles chargées » à l'accueil,
+   puis le menu des horaires du lundi 30 novembre.
 
-Utilisez les instructions du GUIDE_MISE_A_JOUR.md de l'archive SUPABASE PRIVEE.
-Ne mettez aucune cle secret/service_role ni vos codes dans ce depot.
+AUCUNE modification SQL / Supabase Edge n'est nécessaire pour cette correction d'affichage.
+NE JAMAIS publier de secrets Supabase ni l'archive Supabase privée sur GitHub.

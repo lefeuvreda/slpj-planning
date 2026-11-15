@@ -3,6 +3,8 @@
 'use strict';
 const {evaluate,range,minute,clock,formatMinutes,getRow,initialChoice,profileFor,afternoonEndClock} = window.SLPJ_RULES;
 const $=id=>document.getElementById(id);
+// Le repere affiche confirme que le code V2, et non l'ancienne version en cache, a ete charge.
+const versionLabel=$('site-version');if(versionLabel)versionLabel.textContent='Version 30 novembre v3 · règles chargées';
 const escapeHTML=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const frDate=s=>s?new Intl.DateTimeFormat('fr-FR',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(`${s}T12:00:00Z`)):'—';
 const fullName=x=>x?`${x.last_name} ${x.first_name}`:'—';
@@ -198,21 +200,29 @@ function constraintState(choice){
    previous=Date.parse(`${r.date}T00:00:00Z`)/60000+intervals[intervals.length-1][1];
   }
  }
- return {problems,deficit};
+ return {problems,deficit,countedTotal:calc.summary.totalMinutes,countedWeekly:calc.summary.weekly};
 }
-function rejectedReason(candidate){
+function rejectedReason(candidate,editedDate=''){
  const before=constraintState(state.choice),after=constraintState(candidate);
- // Sur une fiche conforme, aucun dépassement ne peut être choisi.
- // Sur une ancienne fiche non conforme, seul un changement qui n'aggrave pas
- // l'écart est permis afin que les horaires restent modifiables pour correction.
- if(after.problems.length && (before.problems.length===0 || after.deficit>before.deficit || after.problems.some(e=>!before.problems.some(old=>old.code===e.code&&old.message===e.message)))){
-  const added=after.problems.find(e=>!before.problems.some(old=>old.code===e.code&&old.message===e.message));
-  return (added||after.problems[0]).message;
+ // Le 30 novembre est hors calcul : un changement exclusivement sur cette date
+ // ne peut déclencher un blocage pour le plafond de la période.
+ // Les contrôles de plages horaires, pause et repos restent pleinement actifs.
+ const sameCounted=before.countedTotal===after.countedTotal &&
+   JSON.stringify(before.countedWeekly)===JSON.stringify(after.countedWeekly);
+ const excludedDay=editedDate==='2026-11-30' && sameCounted;
+ const relevant=problems=>excludedDay?problems.filter(p=>p.code!=='limit'):problems;
+ const beforeProblems=relevant(before.problems),afterProblems=relevant(after.problems);
+ // Une fiche ancienne éventuellement non conforme peut toujours être corrigée,
+ // sans introduire de nouveau défaut ni aggraver les écarts de pause ou repos.
+ if(afterProblems.length && (beforeProblems.length===0 || after.deficit>before.deficit ||
+    afterProblems.some(e=>!beforeProblems.some(old=>old.code===e.code&&old.message===e.message)))){
+  const added=afterProblems.find(e=>!beforeProblems.some(old=>old.code===e.code&&old.message===e.message));
+  return (added||afterProblems[0]).message;
  }
  return '';
 }
-function applyGuardedChoice(next){
- const reason=rejectedReason(next);
+function applyGuardedChoice(next,editedDate=''){
+ const reason=rejectedReason(next,editedDate);
  if(reason){lastRejectedConstraint=reason;renderPlanning();notice('Créneau refusé : '+reason,true);return false;}
  state.choice=next;markChanged();return true;
 }
@@ -267,13 +277,13 @@ function proposedTimeChoice(date,field,value){
 }
 function timeSelect(date,field,value,values,disabled){
  const options=values.map(v=>{
-  const reason=(!disabled&&v!==value)?rejectedReason(proposedTimeChoice(date,field,v)):'';
-  const label=reason?`${v} · ${escapeHTML(shortRule[reason.includes('pause méridienne')?'break':reason.includes('Repos insuffisant')?'rest':'limit']())}`:v;
+  const reason=(!disabled&&v!==value)?rejectedReason(proposedTimeChoice(date,field,v),date):'';
+  const label=reason?`${v} · ${escapeHTML(reason.includes('pause méridienne')?shortRule.break():reason.includes('Repos insuffisant')?shortRule.rest():date!=='2026-11-30'&&(reason.includes('maximum')||reason.includes('supérieur')||reason.includes('dépassement'))?shortRule.limit():'horaire non conforme')}`:v;
   return `<option value="${v}" ${v===value?'selected':''} ${reason?'disabled':''}>${label}</option>`;
  });
  return `<select class="shift-select" data-day="${escapeHTML(date)}" data-time="${field}" ${disabled?'disabled':''} aria-label="${escapeHTML(date+' '+field)}"><option value="" ${!value?'selected':''}>0 h</option>${options.join('')}</select>`;
 }
-function editTime(date,field,value){applyGuardedChoice(proposedTimeChoice(date,field,value));}
+function editTime(date,field,value){applyGuardedChoice(proposedTimeChoice(date,field,value),date);}
 function renderRecoveryPicks(summary,lock){
  const choices=state.choice.recovery||{},profile=currentProfile();
  const cap=summary.allowedExtraHalfDays;
