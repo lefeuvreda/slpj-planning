@@ -10,6 +10,10 @@ const getRow = (day,selection) => ({...defaults(day),...(selection?.hours?.[day.
 const initialChoice = (data) => ({dayOff:'',inauguration:'none',eventPartialMinutes:Math.max(data.settings.event_partial_min_minutes,30),hours:{},recovery:{}});
 // Le mercredi 25 novembre (inauguration), la plage d'après-midi se termine à 18 h,
 // même si un ancien enregistrement local contient encore 22 h.
+// Le lundi 30 novembre est saisi et controle comme toute journee travaillee,
+// mais exclu des plafonds et des droits a recuperation.
+const NON_COUNTED_DATES = new Set(['2026-11-30']);
+const excludedFromCalculation = d => NON_COUNTED_DATES.has(d.date);
 const WEDNESDAY_DATE='2026-11-25';
 const WEDNESDAY_CUTOFF=18*60;
 const afternoonEndLimit=d=>d.date===WEDNESDAY_DATE ? Math.min(minute(d.afternoon_max),WEDNESDAY_CUTOFF) : minute(d.afternoon_max);
@@ -46,7 +50,7 @@ function evaluate(data,choice,employee=null) {
  if(choice.dayOff===s.event_date&&eventMinutes)add('event','Inauguration impossible durant le jour non travaillé.');
  if(eventMinutes>0&&!days.some(d=>d.date===s.event_date))add('event','La date de l’inauguration ne fait pas partie des journées actives.');
  if(choice.hours && (typeof choice.hours!=='object'||Array.isArray(choice.hours)||Object.keys(choice.hours).some(k=>!days.some(d=>d.date===k))))add('hours','Horaires sur une date inconnue.');
- let previousEnd=null,previousDay='',totalMinutes=0;
+ let previousEnd=null,previousDay='',totalMinutes=0,excludedMinutes=0;
  for(const d of days){
    const off=d.date===choice.dayOff; const t=getRow(d,choice);let total=0, event=0;const intervals=[];
    for(const [start,end,lo,hi,label] of [
@@ -83,9 +87,17 @@ function evaluate(data,choice,employee=null) {
      if(previousEnd!==null && first-previousEnd<s.rest_min_minutes)add('rest',`Repos insuffisant entre ${previousDay} et ${d.date} (minimum ${formatMinutes(s.rest_min_minutes)}).`);
      previousEnd=dateMinutes(d.date)+intervals.at(-1)[1];previousDay=d.date;
    }
-   total+=event;totalMinutes+=total;
-   const week=isoWeek(d.date);weekly[week]=(weekly[week]||0)+total;
-   rows.push({...d,...t,off,eventMinutes:event,totalMinutes:total});
+   total+=event;
+   // Les horaires demeurent controles (plages, pause et repos), affiches et sauvegardes.
+   // Seul leur impact sur les totaux et recuperations est neutralise.
+   const excluded=excludedFromCalculation(d);
+   if(excluded)excludedMinutes+=total;
+   else {
+     totalMinutes+=total;
+     const week=isoWeek(d.date);weekly[week]=(weekly[week]||0)+total;
+   }
+   rows.push({...d,...t,off,eventMinutes:event,totalMinutes:total,
+     countedMinutes:excluded?0:total,excludedFromCalculation:excluded});
  }
  for(const [week,n] of Object.entries(weekly))if(n>(profile.special?profile.maxMinutes:s.max_week_minutes))add('limit',`${week} : dépassement du maximum hebdomadaire de ${formatMinutes(profile.special?profile.maxMinutes:s.max_week_minutes)}.`);
  if(totalMinutes>(profile.special?profile.maxMinutes:s.max_period_minutes))add('limit',`Total supérieur à ${formatMinutes(profile.special?profile.maxMinutes:s.max_period_minutes)} autorisées.`);
@@ -111,7 +123,7 @@ function evaluate(data,choice,employee=null) {
    // directeurs et de Sophie doivent être intégralement distribués à 0,5 j près.
    if(selectedUnits<allowedExtra)add('recovery',`Sélectionnez ${allowedExtra} demi-journée(s) supplémentaire(s) (journée entière possible) selon le palier de ${formatMinutes(totalMinutes)}.`);
  } else if(selectedUnits&&!eligible)add('recovery',`Demi-journée accessible à partir de ${formatMinutes(s.recovery_threshold_minutes)}.`);
- return {rows,errors,summary:{totalMinutes,weekly,eligible,recovery:selected[0]||null,recoverySelections:selected,
+ return {rows,errors,summary:{totalMinutes,excludedMinutes,weekly,eligible,recovery:selected[0]||null,recoverySelections:selected,
     selectedExtraHalfDays:selectedUnits,allowedExtraHalfDays:allowedExtra,earnedRecoveryDays:earnedDays,profile:profile.kind,limitMinutes:profile.special?profile.maxMinutes:s.max_period_minutes,
     referenceMinutes:s.reference_minutes}};
 }

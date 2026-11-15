@@ -101,7 +101,7 @@ function renderRoster(){
  const monday=state.days.find(d=>d.active&&d.date==='2026-11-23')||state.days.find(d=>d.active);
  const wednesday=state.days.find(d=>d.active&&d.date==='2026-11-25');
  const wedException=wednesday&&wednesday.afternoon_max!==monday?.afternoon_max;
- if(s&&monday){$('roster-rules').innerHTML=`<b>Règles actives :</b> matin ${escapeHTML(monday.morning_min)}–${escapeHTML(monday.morning_max)} · après-midi ${escapeHTML(monday.afternoon_min)}–${escapeHTML(monday.afternoon_max)}${wedException?' (mercredi jusqu’à '+escapeHTML(wednesday.afternoon_max)+')':''} · pas de ${s.slot_step_minutes} min · pause ${briefDuration(s.break_min_minutes)} · repos ${briefDuration(s.rest_min_minutes)} · plafond standard ${briefDuration(s.max_period_minutes)} · récupération à partir de ${briefDuration(s.recovery_threshold_minutes)} · directeurs et Sophie : ${briefDuration(s.director_max_minutes||3600)} et récupération par paliers.`;}
+ if(s&&monday){$('roster-rules').innerHTML=`<b>Règles actives :</b> matin ${escapeHTML(monday.morning_min)}–${escapeHTML(monday.morning_max)} · après-midi ${escapeHTML(monday.afternoon_min)}–${escapeHTML(monday.afternoon_max)}${wedException?' (mercredi jusqu’à '+escapeHTML(wednesday.afternoon_max)+')':''} · pas de ${s.slot_step_minutes} min · pause ${briefDuration(s.break_min_minutes)} · repos ${briefDuration(s.rest_min_minutes)} · plafond standard ${briefDuration(s.max_period_minutes)} · récupération à partir de ${briefDuration(s.recovery_threshold_minutes)} · directeurs et Sophie : ${briefDuration(s.director_max_minutes||3600)} et récupération par paliers · lundi 30 novembre : horaires à renseigner, hors calcul.`;}
 
  filter.innerHTML='<option value="all">Tous les pôles accessibles</option>'+allowedTeams().map(t=>`<option value="${escapeHTML(t.id)}" ${state.teamFilter===t.id?'selected':''}>${escapeHTML(t.name)}</option>`).join('');
  const teams=allowedTeams().filter(t=>state.teamFilter==='all'||t.id===state.teamFilter);
@@ -229,13 +229,14 @@ function renderPlanning(){if(!state.current)return;const choice=state.choice,cal
  const partial=$('event-partial');partial.innerHTML=Array.from({length:Math.floor((s.event_partial_max_minutes-s.event_partial_min_minutes)/s.slot_step_minutes)+1},(_,i)=>s.event_partial_min_minutes+i*s.slot_step_minutes).map(n=>`<option value="${n}" ${Number(choice.eventPartialMinutes)===n?'selected':''}>${formatMinutes(n)}</option>`).join('');
  $('event-partial-container').classList.toggle('hidden',choice.inauguration!=='partial');partial.disabled=lock;
  let body='';for(const d of calc.rows){const raw=getRow(d,choice),off=d.off;
-  body+=`<tr class="${off?'is-off':''}"><td><strong>${escapeHTML(frDate(d.date))}</strong></td><td>${off?'Jour non travaillé':timePair(d,raw,'morning',lock)}</td><td>${off?'—':timePair(d,raw,'afternoon',lock)}</td><td>${d.eventMinutes?'+'+formatMinutes(d.eventMinutes):'—'}</td><td><strong>${formatMinutes(d.totalMinutes)}</strong></td></tr>`;
+  const excluded=d.excludedFromCalculation;
+  body+=`<tr class="${off?'is-off':''} ${excluded?'outside-week':''}"><td><strong>${escapeHTML(frDate(d.date))}</strong>${excluded?'<div><span class="special-tag">Hors calcul</span></div>':''}</td><td>${off?'Jour non travaillé':timePair(d,raw,'morning',lock)}</td><td>${off?'—':timePair(d,raw,'afternoon',lock)}</td><td>${d.eventMinutes?'+'+formatMinutes(d.eventMinutes):'—'}</td><td><strong>${formatMinutes(d.totalMinutes)}</strong>${excluded?'<div class="subtle">Non comptabilisées</div>':''}</td></tr>`;
  }
  $('working-days').innerHTML=body;
  $('working-days').querySelectorAll('[data-time]').forEach(x=>x.addEventListener('change',()=>editTime(x.dataset.day,x.dataset.time,x.value)));
- $('period-total').textContent=`${formatMinutes(calc.summary.totalMinutes)} / ${formatMinutes(limit)} maximum`;
+ $('period-total').textContent=`${formatMinutes(calc.summary.totalMinutes)} / ${formatMinutes(limit)} maximum · lundi 30 novembre : ${formatMinutes(calc.summary.excludedMinutes)} prévues, hors calcul`;
  $('rule-feedback').className='policy-status '+(calc.errors.length||lastRejectedConstraint?'invalid':'valid');
- $('rule-feedback').innerHTML=(lastRejectedConstraint?`<strong>Choix refusé — horaire inchangé :</strong> ${escapeHTML(lastRejectedConstraint)}<div class="subtle margin-top">Sélectionnez un autre créneau : les limites de ${briefDuration(limit)}, les pauses minimales de ${briefDuration(s.break_min_minutes)} et les repos de ${briefDuration(s.rest_min_minutes)} sont contrôlés.</div>`:'')+(calc.errors.length?`<strong>À corriger :</strong><ul>${calc.errors.map(x=>`<li>${escapeHTML(x.message)}</li>`).join('')}</ul>`:!lastRejectedConstraint?`Contrôle actif : maximum ${briefDuration(limit)} · pause méridienne minimale ${briefDuration(s.break_min_minutes)} · repos minimal ${briefDuration(s.rest_min_minutes)}. Les horaires non conformes sont indisponibles.`:'');
+ $('rule-feedback').innerHTML=(lastRejectedConstraint?`<strong>Choix refusé — horaire inchangé :</strong> ${escapeHTML(lastRejectedConstraint)}<div class="subtle margin-top">Sélectionnez un autre créneau : les limites de ${briefDuration(limit)}, les pauses minimales de ${briefDuration(s.break_min_minutes)} et les repos de ${briefDuration(s.rest_min_minutes)} sont contrôlés.</div>`:'')+(calc.errors.length?`<strong>À corriger :</strong><ul>${calc.errors.map(x=>`<li>${escapeHTML(x.message)}</li>`).join('')}</ul>`:!lastRejectedConstraint?`Contrôle actif : maximum ${briefDuration(limit)} · pause méridienne minimale ${briefDuration(s.break_min_minutes)} · repos minimal ${briefDuration(s.rest_min_minutes)}. Les horaires non conformes sont indisponibles.`:'')+'<div class="subtle margin-top">Lundi 30 novembre : horaires contrôlés, enregistrés et imprimés, mais exclus du total et des récupérations.</div>';
  renderRecoveryPicks(calc.summary,lock);
  $('last-save').textContent=sub?`Dernier enregistrement : ${new Date(sub.updated_at).toLocaleString('fr-FR')}${stale?' · Configuration modifiée depuis':''}`:'Enregistrez une fiche conforme.';
  $('save-planning').disabled=lock||calc.errors.length>0||!state.dirty&&!!sub&&!stale;
@@ -286,7 +287,7 @@ function renderRecoveryPicks(summary,lock){
    `<strong>${cap} demi-journée(s)</strong> supplémentaire(s). Une journée entière compte pour deux demi-journées. `+
    `Choix actuel : <strong>${count}/${cap} demi-journée(s)</strong>. `+
    `Paliers : &gt; 38,5 h à 44 h = 1 j · &gt; 44 h à 48 h = 1,5 j · &gt; 48 h à 52 h = 2 j · &gt; 52 h à 60 h = 2,5 j.`+
-   (recovery===0?' Aucun droit acquis au titre des paliers jusqu’à 38,5 h ; la date fixe reste affichée dans la démo.':'');
+   (recovery===0?' Aucun droit acquis au titre des paliers jusqu’à 38,5 h ; la date fixe reste affichée.':'');
  }else{
   $('recovery-explanation').textContent=`Une seule demi-journée au choix à partir de ${formatMinutes(state.settings.recovery_threshold_minutes)} travaillées.`;
  }
@@ -341,7 +342,7 @@ function renderTeams(){const root=$('team-list');root.innerHTML=`<table class="a
 function renderPeople(){const root=$('people-list');root.innerHTML=`<table class="admin-table"><thead><tr><th>Collaborateur</th><th>Fonction</th><th>Pôle</th><th>Fiche</th><th>Édition</th></tr></thead><tbody>${state.employees.map(e=>`<tr><td><strong>${escapeHTML(fullName(e))}</strong> ${e.active?'':'<span class="pill gray">Inactif</span>'}</td><td>${escapeHTML(e.job_title)}</td><td>${escapeHTML(teamById(e.team_id)?.name||e.team_id)}</td><td>${e.special_form?'Particulière':'Standard'}</td><td><button class="btn btn-outline btn-small" data-person-edit="${escapeHTML(e.id)}">Modifier</button></td></tr>`).join('')}</tbody></table>`;
  root.querySelectorAll('[data-person-edit]').forEach(b=>b.addEventListener('click',()=>editRecord('person',b.dataset.personEdit)));
 }
-function renderDays(){const root=$('days-list');root.innerHTML=`<table class="admin-table"><thead><tr><th>Date</th><th>Plage matin</th><th>Plage après-midi</th><th>Horaires par défaut</th><th>Repos possible</th><th>Édition</th></tr></thead><tbody>${state.days.map(d=>`<tr><td><strong>${escapeHTML(frDate(d.date))}</strong> ${d.active?'':'(inactif)'}</td><td>${escapeHTML(d.morning_min)} – ${escapeHTML(d.morning_max)}</td><td>${escapeHTML(d.afternoon_min)} – ${escapeHTML(d.afternoon_max)}</td><td>${escapeHTML(d.default_morning_start||'0 h')} / ${escapeHTML(d.default_morning_end||'0 h')}<br>${escapeHTML(d.default_afternoon_start||'0 h')} / ${escapeHTML(d.default_afternoon_end||'0 h')}</td><td>${d.can_be_off?'Oui':'Non'}</td><td><button class="btn btn-outline btn-small" data-day-edit="${escapeHTML(d.date)}">Modifier</button></td></tr>`).join('')}</tbody></table>`;
+function renderDays(){const root=$('days-list');root.innerHTML=`<table class="admin-table"><thead><tr><th>Date</th><th>Plage matin</th><th>Plage après-midi</th><th>Horaires par défaut</th><th>Repos possible</th><th>Édition</th></tr></thead><tbody>${state.days.map(d=>`<tr><td><strong>${escapeHTML(frDate(d.date))}</strong> ${d.date==='2026-11-30'?'<span class="special-tag">Hors calcul</span>':''} ${d.active?'':'(inactif)'}</td><td>${escapeHTML(d.morning_min)} – ${escapeHTML(d.morning_max)}</td><td>${escapeHTML(d.afternoon_min)} – ${escapeHTML(d.afternoon_max)}</td><td>${escapeHTML(d.default_morning_start||'0 h')} / ${escapeHTML(d.default_morning_end||'0 h')}<br>${escapeHTML(d.default_afternoon_start||'0 h')} / ${escapeHTML(d.default_afternoon_end||'0 h')}</td><td>${d.can_be_off?'Oui':'Non'}</td><td><button class="btn btn-outline btn-small" data-day-edit="${escapeHTML(d.date)}">Modifier</button></td></tr>`).join('')}</tbody></table>`;
  root.querySelectorAll('[data-day-edit]').forEach(b=>b.addEventListener('click',()=>editRecord('day',b.dataset.dayEdit)));
 }
 function renderRecoveries(){const root=$('recoveries-list');root.innerHTML=`<table class="admin-table"><thead><tr><th>Date</th><th>Type</th><th>État</th><th></th></tr></thead><tbody>${state.recoveries.map(r=>`<tr><td>${escapeHTML(frDate(r.date))}</td><td>${r.mandatory?'Journée entière fixe':'½ journée ou journée entière selon profil'}</td><td>${r.active?'Active':'Inactive'}</td><td><button class="btn btn-outline btn-small" data-rec-edit="${escapeHTML(r.date)}">Modifier</button></td></tr>`).join('')}</tbody></table>`;
@@ -431,6 +432,7 @@ async function saveRecord(event){event.preventDefault();const mode=editorMode,id
    const allowed=/^([01]\d|2[0-3]):[0-5]\d$/;
    for(const field of ['morning_min','morning_max','afternoon_min','afternoon_max'])if(!allowed.test(values[field]))throw new Error('Saisissez les plages horaires au format HH:MM.');
    if(minute(values.morning_min)>=minute(values.morning_max)||minute(values.afternoon_min)>=minute(values.afternoon_max))throw new Error('La fin de chaque plage doit être postérieure au début.');
+   if(values.date==='2026-11-30' && (!values.active || values.can_be_off))throw new Error('Le lundi 30 novembre doit rester visible et ne peut pas être choisi comme jour non travaillé.');
    if(values.date==='2026-11-25' && (minute(values.afternoon_max)>18*60 || minute(values.afternoon_min)>=18*60))throw new Error('Mercredi 25 novembre (inauguration) : la plage après-midi doit se terminer à 18 h au plus tard.');
    const step=state.settings.slot_step_minutes;
    for(const period of ['morning','afternoon'])for(const k of ['start','end']){
@@ -456,7 +458,7 @@ async function saveRecord(event){event.preventDefault();const mode=editorMode,id
 async function setTeamCode(teamId){
  if(!state.admin)return;
  const team=teamById(teamId);if(!team||!team.manager_employee_id){notice('Désignez un responsable pour ce pôle.',true);return;}
- if(team.id==='PAG-A'){notice('Le code ADMIN de Marie PARIS est défini dans la démonstration.',true);return;}
+ if(team.id==='PAG-A'){notice('Le code ADMIN de Marie PARIS se modifie dans Supabase Auth.',true);return;}
  const code=window.prompt(`Nouveau code du responsable ${fullName(employeeById(team.manager_employee_id))} (${team.name}) :\nMinimum 12 caractères. Évitez les codes réutilisés ailleurs.`);
  if(code===null)return;
  if(code.trim().length<12){notice('Code trop court : minimum 12 caractères.',true);return;}
